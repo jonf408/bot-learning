@@ -248,7 +248,7 @@ void OnTick()
    )
      {
       price = iHigh(NULL, PERIOD_H1, 1) + 215 * myPoint;
-      SL = 100 * myPoint; //Stop Loss = value in points (relative to price)
+      SL = 200 * myPoint; //Stop Loss = value in points (relative to price)
       TP = 200 * myPoint; //Take Profit = value in points (relative to price)   
       if(IsTradeAllowed())
         {
@@ -266,7 +266,7 @@ void OnTick()
    )
      {
       price = iLow(NULL, PERIOD_H1, 1) - 215 * myPoint;
-      SL = 100 * myPoint; //Stop Loss = value in points (relative to price)
+      SL = 200 * myPoint; //Stop Loss = value in points (relative to price)
       TP = 200 * myPoint; //Take Profit = value in points (relative to price)   
       if(IsTradeAllowed())
         {
