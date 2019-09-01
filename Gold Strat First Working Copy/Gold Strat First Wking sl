@@ -13,10 +13,11 @@
 
 int LotDigits; //initialized in OnInit
 int MagicNumber = 1628868;
-double TradeSize = 0.1;
+double MM_Percent = 1;
 int MaxSlippage = 3; //adjusted in OnInit
+double MaxSL = 20;
 datetime NextTime[2]; //initialized to 0, used in function TimeSignal
-int MaxOpenTrades = 1000;
+int MaxOpenTrades = 1;
 int MaxLongTrades = 1000;
 int MaxShortTrades = 1000;
 int MaxPendingOrders = 1000;
@@ -24,6 +25,27 @@ bool Hedging = true;
 int OrderRetry = 5; //# of retries if sending order returns error
 int OrderWait = 5; //# of seconds to wait if sending order returns error
 double myPoint; //initialized in OnInit
+
+double MM_Size(double SL) //Risk % per trade, SL = relative Stop Loss to calculate risk
+  {
+   double MaxLot = MarketInfo(Symbol(), MODE_MAXLOT);
+   double MinLot = MarketInfo(Symbol(), MODE_MINLOT);
+   double tickvalue = MarketInfo(Symbol(), MODE_TICKVALUE);
+   double ticksize = MarketInfo(Symbol(), MODE_TICKSIZE);
+   double lots = MM_Percent * 1.0 / 100 * AccountBalance() / (SL / ticksize * tickvalue);
+   if(lots > MaxLot) lots = MaxLot;
+   if(lots < MinLot) lots = MinLot;
+   return(lots);
+  }
+
+double MM_Size_BO() //Risk % per trade for Binary Options
+  {
+   double MaxLot = MarketInfo(Symbol(), MODE_MAXLOT);
+   double MinLot = MarketInfo(Symbol(), MODE_MINLOT);
+   double tickvalue = MarketInfo(Symbol(), MODE_TICKVALUE);
+   double ticksize = MarketInfo(Symbol(), MODE_TICKSIZE);
+   return(MM_Percent * 1.0 / 100 * AccountBalance());
+  }
 
 bool TimeSignal(int i, int hh, int mm, int ss, bool time_repeat, int repeat_interval)
   {
@@ -218,6 +240,7 @@ int OnInit()
    else if(LotStep >= 0.1) LotDigits = 1;
    else if(LotStep >= 0.01) LotDigits = 2;
    else LotDigits = 3;
+   MaxSL = MaxSL * myPoint;
    int i;
    //initialize NextTime
    for (i = 0; i < ArraySize(NextTime); i++)
@@ -239,20 +262,25 @@ void OnTick()
   {
    int ticket = -1;
    double price;   
+   double TradeSize;
    double SL;
    double TP;
    
    
-   //Open Pending Buy Order, instant signal is tested first
+   //Open Buy Order, instant signal is tested first
    if(TimeSignal(0, 04, 00, 00, false, 12 * 3600) //Send order at time
+   && iCCI(NULL, PERIOD_CURRENT, 30, PRICE_TYPICAL, 0) < -100 //Commodity Channel Index < fixed value
    )
      {
-      price = iHigh(NULL, PERIOD_H1, 1) + 215 * myPoint;
+      RefreshRates();
+      price = Ask;
       SL = 200 * myPoint; //Stop Loss = value in points (relative to price)
+      if(SL > MaxSL) SL = MaxSL;
+      TradeSize = MM_Size(SL);
       TP = 200 * myPoint; //Take Profit = value in points (relative to price)   
       if(IsTradeAllowed())
         {
-         ticket = myOrderSend(OP_BUYSTOP, price, TradeSize, ""); //pending order at Candlestick High + fixed value
+         ticket = myOrderSend(OP_BUY, price, TradeSize, "");
          if(ticket <= 0) return;
         }
       else //not autotrading => only send alert
@@ -261,16 +289,20 @@ void OnTick()
       myOrderModifyRel(ticket, SL, 0);
      }
    
-   //Open Pending Sell Order, instant signal is tested first
+   //Open Sell Order, instant signal is tested first
    if(TimeSignal(1, 04, 00, 00, false, 12 * 3600) //Send order at time
+   && iCCI(NULL, PERIOD_CURRENT, 30, PRICE_TYPICAL, 0) > 100 //Commodity Channel Index > fixed value
    )
      {
-      price = iLow(NULL, PERIOD_H1, 1) - 215 * myPoint;
+      RefreshRates();
+      price = Bid;
       SL = 200 * myPoint; //Stop Loss = value in points (relative to price)
+      if(SL > MaxSL) SL = MaxSL;
+      TradeSize = MM_Size(SL);
       TP = 200 * myPoint; //Take Profit = value in points (relative to price)   
       if(IsTradeAllowed())
         {
-         ticket = myOrderSend(OP_SELLSTOP, price, TradeSize, ""); //pending order at Candlestick Low - fixed value
+         ticket = myOrderSend(OP_SELL, price, TradeSize, "");
          if(ticket <= 0) return;
         }
       else //not autotrading => only send alert
